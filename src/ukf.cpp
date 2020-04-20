@@ -235,6 +235,28 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
    * covariance, P_.
    * You can also calculate the lidar NIS, if desired.
    */
+
+  MatrixXd H = MatrixXd(2,5);
+  H << 1,0,0,0,0,
+      0,1,0,0,0;
+
+  VectorXd z_pred = H*x_;
+
+  VectorXd pred_error_lidar = meas_package.raw_measurements_ - z_pred;
+
+  MatrixXd I = MatrixXd::Identity(x_.size(),x_.size());
+
+  MatrixXd S = H*P_*H.transpose() + R_lidar;
+  
+  MatrixXd PHt = P_*H.transpose();
+
+  MatrixXd K_lidar = PHt * S.inverse();
+
+  // State and Covariance update
+  x_ = x_ + K_lidar*pred_error_lidar;
+  P_ = (I-K_lidar*H)*P_;
+
+  /** Unscented Transformation
   MatrixXd Zsig_lidar = MatrixXd(n_z_lidar_, 2 * n_aug_ + 1);
 
   VectorXd z_pred_lidar = VectorXd(n_z_lidar_);
@@ -284,6 +306,7 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
   // Update state and covariance
   x_ = x_ + K_lidar*z_innov_lidar_;
   P_ = P_ - K_lidar * S_lidar * K_lidar.transpose();
+  **/
 }
 
 void UKF::UpdateRadar(MeasurementPackage meas_package) {
