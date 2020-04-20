@@ -86,14 +86,9 @@ UKF::UKF() {
   P_ = MatrixXd(n_x_,n_x_);
 
   x_.fill(0.0);
-  P_.fill(0.0);
 
-  P_ << 1,0,0,0,0,
-        0,1,0,0,0,
-        0,0,1,0,0,
-        0,0,0,1,0,
-        0,0,0,0,1;
-  
+  P_.fill(0.0);
+  P_ = MatrixXd::Identity(5,5);
   // Weight
   weights_ = VectorXd(2*n_aug_+1);
   weights_(0) = (double) lambda_/(lambda_ + n_aug_);  
@@ -125,6 +120,11 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   }
 }
 
+void UKF::angleNomalizer(double &phi)
+{
+  phi = atan2(sin(phi),cos(phi));
+}
+
 void UKF::Prediction(double delta_t) {
   /**
    * TODO: Complete this function! Estimate the object's location. 
@@ -153,8 +153,8 @@ void UKF::Prediction(double delta_t) {
   // Create augmented sigma points
   Xsig_aug.col(0) = x_aug;
   
-  double const_aug = sqrt(lambda_ + n_aug_);
-
+  const double const_aug = sqrt(lambda_ + n_aug_);
+  
   for(int i = 0; i < n_aug_; ++i)
   {
     Xsig_aug.col(i+1) = x_aug + const_aug*L.col(i);
@@ -210,10 +210,13 @@ void UKF::Prediction(double delta_t) {
 
   // Predict the mean state
   x_.fill(0.0);
+  /**
   for(int i = 0; i < 2*n_aug_ + 1; ++i)
   {
     x_ = x_ + weights_(i) * Xsig_pred_.col(i);
   }
+  **/
+  x_ = Xsig_pred_*weights_;
   // Predict the covariance matrix
   P_.fill(0.0);
   for(int i = 0; i < 2*n_aug_ + 1; ++i)
@@ -268,9 +271,8 @@ void UKF::UpdateLidar(MeasurementPackage meas_package) {
     S_lidar = S_lidar + weights_(i)*z_tild_lidar*z_tild_lidar.transpose();
 
     VectorXd x_tild = Xsig_pred_.col(i) - x_;
+    angleNomalizer(x_tild(3));
 
-    while (x_tild(3) > M_PI ) x_tild(3) -=2.*M_PI;
-    while (x_tild(3) < -M_PI ) x_tild(3) +=2.*M_PI;
     Tc_lidar = Tc_lidar + weights_(i) * x_tild * z_tild_lidar.transpose();
   }
 
@@ -326,10 +328,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
 
   // Calculate the mean value of the sigma points
   z_pred_radar.fill(0.0);
-  for(int i = 0; i < 2 * n_aug_ + 1; ++i)
-  {
-    z_pred_radar = z_pred_radar + weights_(i) * Zsig_radar.col(i);
-  }
+  z_pred_radar = Zsig_radar*weights_;
 
   // Calculate Cross correlation covariance and innovation covariance matrices
   Tc_radar.fill(0.0);
@@ -337,14 +336,12 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   for(int i = 0; i < 2 * n_aug_ + 1; ++i)
   {
     VectorXd z_tild_radar = Zsig_radar.col(i) - z_pred_radar;
-    while(z_tild_radar(1) > M_PI) z_tild_radar(1) -= 2.*M_PI;
-    while(z_tild_radar(1) < -M_PI) z_tild_radar(1) += 2.*M_PI;
+    angleNomalizer(z_tild_radar(1));
     S_radar = S_radar + weights_(i)*z_tild_radar*z_tild_radar.transpose();
 
     VectorXd x_tild = Xsig_pred_.col(i) - x_;
-
-    while (x_tild(3) > M_PI ) x_tild(3) -=2.*M_PI;
-    while (x_tild(3) < -M_PI ) x_tild(3) +=2.*M_PI;
+    angleNomalizer(x_tild(3));
+    
     Tc_radar = Tc_radar + weights_(i) * x_tild * z_tild_radar.transpose();
   }
 
@@ -352,8 +349,7 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
   K_radar = Tc_radar * S_radar.inverse();
 
   VectorXd z_innov_radar_ = meas_package.raw_measurements_ - z_pred_radar;
-  while(z_innov_radar_(1) > M_PI) z_innov_radar_(1) -=2.*M_PI;
-  while(z_innov_radar_(1) < -M_PI) z_innov_radar_(1) +=2.*M_PI;
+  angleNomalizer(z_innov_radar_(1));
   // Update state and covariance
   x_ = x_ + K_radar*z_innov_radar_;
   P_ = P_ - K_radar * S_radar * K_radar.transpose();
